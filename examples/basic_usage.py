@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from glueprompt import PromptRegistry
+from glueprompt.renderer import TemplateRenderer
 
 # Initialize registry with path to prompts directory
 # In practice, this would be a git submodule
@@ -28,8 +29,6 @@ print(rendered)
 print("=" * 50)
 
 # Or render using the renderer directly
-from glueprompt.renderer import TemplateRenderer
-
 renderer = TemplateRenderer()
 rendered2 = renderer.render(
     prompt,

@@ -1,6 +1,5 @@
 """Pytest configuration for glue-prompt tests."""
 
-from pathlib import Path
 
 import pytest
 import yaml

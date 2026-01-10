@@ -1,13 +1,13 @@
 """Extended tests for prompt loader - file resolution, cache, variable parsing."""
 
-import time
 import tempfile
+import time
 from pathlib import Path
 
 import pytest
 import yaml
 
-from glueprompt.exceptions import PromptNotFoundError, PromptValidationError
+from glueprompt.exceptions import PromptValidationError
 from glueprompt.loader import PromptLoader
 
 

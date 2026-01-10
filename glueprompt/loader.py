@@ -83,7 +83,7 @@ class PromptLoader:
                     f"escapes prompts directory {resolved_prompts_dir}"
                 )
                 raise PromptValidationError(
-                    f"Invalid prompt path: path escapes prompts directory"
+                    "Invalid prompt path: path escapes prompts directory"
                 )
         except (OSError, ValueError) as e:
             # Handle cases where path resolution fails (e.g., broken symlinks)
@@ -200,8 +200,7 @@ class PromptLoader:
             if self._is_cache_valid((cached_prompt, timestamp)):
                 logger.debug(f"Cache hit for prompt: {prompt_path}")
                 return cached_prompt
-            else:
-                logger.debug(f"Cache expired for prompt: {prompt_path}")
+            logger.debug(f"Cache expired for prompt: {prompt_path}")
 
         logger.debug(f"Cache miss for prompt: {prompt_path}")
 

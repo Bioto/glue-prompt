@@ -4,7 +4,7 @@ import json
 import shutil
 from pathlib import Path
 
-from git import GitCommandError, InvalidGitRepositoryError, Repo
+from git import GitCommandError, Repo
 
 from glueprompt.exceptions import GitOperationError
 from glueprompt.logging import get_logger
@@ -112,8 +112,7 @@ def url_to_repo_name(url: str) -> str:
         Repository name (e.g., "my-prompts" from "https://github.com/user/my-prompts.git")
     """
     # Handle SSH and HTTPS URLs
-    name = url.rstrip("/").rstrip(".git").split("/")[-1]
-    return name
+    return url.rstrip("/").rstrip(".git").split("/")[-1]
 
 
 class RepoManager:

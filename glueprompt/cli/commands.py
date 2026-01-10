@@ -33,11 +33,11 @@ def ensure_git_repo(prompts_dir: Path) -> Repo:
     """
     try:
         return Repo(str(prompts_dir))
-    except InvalidGitRepositoryError:
+    except InvalidGitRepositoryError as e:
         raise GitOperationError(
             f"Not a git repository: {prompts_dir}. "
             f"Cached repos should be cloned via 'glueprompt repo add <url>'"
-        )
+        ) from e
 
 
 def bump_version(version: str, bump_type: str = "patch") -> str:
@@ -97,7 +97,7 @@ def git_commit(repo: Repo, file_path: Path, message: str, tag: str | None = None
             if remote:
                 repo.git.push(remote.name, branch)
                 console.print(f"[green]✓[/green] Pushed to {remote.name}/{branch}")
-                
+
                 # Create and push tag if specified
                 if tag:
                     repo.create_tag(tag, message=f"Version {tag}")
@@ -176,7 +176,7 @@ def repo_add(url: str, name: str | None, branch: str | None, force: bool) -> Non
         console.print(f"\nUse it with: [cyan]glueprompt --repo {repo_name} get <prompt-path>[/cyan]")
     except Exception as e:
         err_console.print(f"[red]Error:[/red] {e}")
-        raise click.Abort()
+        raise click.Abort() from e
 
 
 @repo.command("remove")
@@ -194,7 +194,7 @@ def repo_remove(name: str, yes: bool) -> None:
         console.print(f"[green]✓[/green] Removed '{name}'")
     except Exception as e:
         err_console.print(f"[red]Error:[/red] {e}")
-        raise click.Abort()
+        raise click.Abort() from e
 
 
 @repo.command("list")
@@ -238,7 +238,7 @@ def repo_update(name: str, branch: str | None) -> None:
         console.print(f"[green]✓[/green] Updated '{name}'")
     except Exception as e:
         err_console.print(f"[red]Error:[/red] {e}")
-        raise click.Abort()
+        raise click.Abort() from e
 
 
 @repo.command("default")
@@ -260,7 +260,7 @@ def repo_default(name: str | None) -> None:
             console.print(f"[green]✓[/green] Set default repository: {name}")
         except Exception as e:
             err_console.print(f"[red]Error:[/red] {e}")
-            raise click.Abort()
+            raise click.Abort() from e
     else:
         default = manager.get_default_repo()
         if default:
@@ -358,7 +358,7 @@ def prompt_get(ctx: click.Context, prompt_path: str, validate: bool) -> None:
         console.print(prompt.template)
     except Exception as e:
         err_console.print(f"[red]Error:[/red] {e}")
-        raise click.Abort()
+        raise click.Abort() from e
 
 
 @prompt.command("add")
@@ -614,7 +614,7 @@ def prompt_render(ctx: click.Context, prompt_path: str, var: tuple, validate: bo
         console.print(rendered)
     except Exception as e:
         err_console.print(f"[red]Error:[/red] {e}")
-        raise click.Abort()
+        raise click.Abort() from e
 
 
 @prompt.command("validate")
@@ -632,11 +632,10 @@ def prompt_validate(ctx: click.Context, prompt_path: str) -> None:
             for error in errors:
                 console.print(f"  - {error}")
             raise click.Abort()
-        else:
-            console.print(f"[green]✓[/green] Prompt '{prompt_path}' is valid")
+        console.print(f"[green]✓[/green] Prompt '{prompt_path}' is valid")
     except Exception as e:
         err_console.print(f"[red]Error:[/red] {e}")
-        raise click.Abort()
+        raise click.Abort() from e
 
 
 @prompt.command("list")
@@ -727,7 +726,7 @@ def version_list(ctx: click.Context) -> None:
         console.print(f"[bold]Current:[/bold] {current.branch_or_tag} ({current.commit_hash})")
     except Exception as e:
         err_console.print(f"[red]Error:[/red] {e}")
-        raise click.Abort()
+        raise click.Abort() from e
 
 
 @version.command("checkout")
@@ -748,7 +747,7 @@ def version_checkout(ctx: click.Context, branch_or_tag: str, create: bool) -> No
         )
     except Exception as e:
         err_console.print(f"[red]Error:[/red] {e}")
-        raise click.Abort()
+        raise click.Abort() from e
 
 
 @version.command("diff")
@@ -769,4 +768,4 @@ def version_diff(ctx: click.Context, prompt_path: str, v1: str | None, v2: str |
             console.print("[yellow]No differences found[/yellow]")
     except Exception as e:
         err_console.print(f"[red]Error:[/red] {e}")
-        raise click.Abort()
+        raise click.Abort() from e

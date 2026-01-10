@@ -1,7 +1,6 @@
 """Git version management for prompts."""
 
 from pathlib import Path
-from typing import Any
 
 from git import GitCommandError, InvalidGitRepositoryError, Repo
 
@@ -78,18 +77,17 @@ class VersionManager:
                     commit_date=head_commit.committed_datetime,
                     is_branch=False,
                 )
-            else:
-                # On a branch
-                branch = self.repo.active_branch
-                commit = branch.commit
-                logger.debug(f"Current version: branch {branch.name} at {commit.hexsha[:8]}")
-                return VersionInfo(
-                    branch_or_tag=branch.name,
-                    commit_hash=commit.hexsha[:8],
-                    commit_message=commit.message.split("\n")[0],
-                    commit_date=commit.committed_datetime,
-                    is_branch=True,
-                )
+            # On a branch
+            branch = self.repo.active_branch
+            commit = branch.commit
+            logger.debug(f"Current version: branch {branch.name} at {commit.hexsha[:8]}")
+            return VersionInfo(
+                branch_or_tag=branch.name,
+                commit_hash=commit.hexsha[:8],
+                commit_message=commit.message.split("\n")[0],
+                commit_date=commit.committed_datetime,
+                is_branch=True,
+            )
         except Exception as e:
             logger.error(f"Failed to get current version: {e}", exc_info=True)
             raise VersionError(f"Failed to get current version: {e}") from e
@@ -267,7 +265,7 @@ class VersionManager:
             else:
                 # Diff against HEAD
                 diff_output = self.repo.git.diff("HEAD", "--", str(rel_path))
-            
+
             logger.debug(f"Diff retrieved successfully (length={len(diff_output)} chars)")
             return diff_output
         except GitCommandError as e:

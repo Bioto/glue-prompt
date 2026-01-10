@@ -1,8 +1,6 @@
 """Tests for version management - git operations, branches, tags."""
 
-import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch
 
 import pytest
 

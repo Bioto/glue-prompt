@@ -1,8 +1,7 @@
 """Prompt diff and comparison utilities."""
 
-from typing import Any
-
 from difflib import unified_diff
+from typing import Any
 
 from glueprompt.models.prompt import Prompt
 

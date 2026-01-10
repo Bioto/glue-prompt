@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from jinja2 import Environment, StrictUndefined, Template, TemplateError, UndefinedError
+from jinja2 import Environment, StrictUndefined, TemplateError, UndefinedError
 
 from glueprompt.exceptions import TemplateRenderError
 from glueprompt.logging import get_logger

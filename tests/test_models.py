@@ -1,6 +1,5 @@
 """Tests for prompt models."""
 
-import pytest
 
 from glueprompt.models.prompt import Prompt, PromptMetadata, VariableDefinition
 

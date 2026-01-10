@@ -2,14 +2,12 @@
 
 import shutil
 from pathlib import Path
-from typing import Any
 
 from git import GitCommandError, Repo
 from git.exc import InvalidGitRepositoryError
 
 from glueprompt.exceptions import GitOperationError
 from glueprompt.logging import get_json_logger
-from glueprompt.repo_manager import get_cache_dir
 
 logger = get_json_logger(__name__)
 
@@ -88,7 +86,7 @@ class WorktreeManager:
         if worktree_path.exists():
             # Verify it's still valid
             try:
-                worktree_repo = Repo(str(worktree_path))
+                Repo(str(worktree_path))
                 # Check if it's pointing to the right commit
                 logger.debug("Using existing worktree", extra={"repo": self.repo_name, "version": version, "path": str(worktree_path)})
                 return worktree_path
@@ -110,7 +108,7 @@ class WorktreeManager:
             # Check if version exists as tag, local branch, or remote branch
             tag_names = [tag.name for tag in self.main_repo.tags]
             branch_names = [ref.name for ref in self.main_repo.branches]
-            
+
             # Get remote branches using git branch -r
             remote_branches = []
             try:
@@ -192,11 +190,7 @@ class WorktreeManager:
         Returns:
             List of prompt paths (relative, without extension)
         """
-        if version is None:
-            # Use main repo
-            base_path = self.repo_path
-        else:
-            base_path = self.ensure_worktree(version)
+        base_path = self.repo_path if version is None else self.ensure_worktree(version)
 
         prompts: list[str] = []
         for yaml_file in base_path.rglob("*.yaml"):

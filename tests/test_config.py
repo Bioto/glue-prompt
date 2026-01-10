@@ -4,8 +4,6 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from glueprompt.config import GluePromptSettings, get_settings, reload_settings
 
 

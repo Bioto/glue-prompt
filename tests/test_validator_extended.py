@@ -1,8 +1,6 @@
 """Extended tests for prompt validator - edge cases, variable extraction."""
 
-import pytest
 
-from glueprompt.exceptions import PromptValidationError
 from glueprompt.models.prompt import Prompt, PromptMetadata, VariableDefinition
 from glueprompt.validator import PromptValidator
 

@@ -6,8 +6,8 @@ from fastapi import FastAPI, HTTPException, Query
 
 from glueprompt.loader import PromptLoader
 from glueprompt.logging import get_json_logger
-from glueprompt.repo_manager import RepoManager
 from glueprompt.renderer import TemplateRenderer
+from glueprompt.repo_manager import RepoManager
 from glueprompt.server.models import (
     PromptMetadataResponse,
     PromptResponse,
@@ -104,7 +104,7 @@ def list_versions(repo: str) -> VersionsResponse:
         )
     except Exception as e:
         logger.error("Failed to list versions", extra={"repo": repo, "error": str(e)}, exc_info=True)
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @app.get("/repos/{repo}/prompts")
@@ -125,7 +125,7 @@ def list_prompts(
         return {"prompts": prompts}
     except Exception as e:
         logger.error("Failed to list prompts", extra={"repo": repo, "version": version, "error": str(e)}, exc_info=True)
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @app.get("/repos/{repo}/prompts/{prompt_path:path}", response_model=PromptResponse)
@@ -135,7 +135,7 @@ def get_prompt(
     version: Annotated[str | None, Query(description="Prompt version (e.g., 1.0.5)")] = None,
 ) -> PromptResponse:
     """Get a prompt by path, optionally at a specific version.
-    
+
     When version is specified, looks for tag '{prompt_path}/v{version}'.
     """
     logger.info(
@@ -154,7 +154,7 @@ def get_prompt(
             prompt_name = prompt_path.replace("/", "-")
             tag_name = f"{prompt_name}/v{version}"
             logger.debug("Using version-specific tag", extra={"repo": repo, "prompt": prompt_path, "tag": tag_name})
-            
+
             # Use worktree for specific version
             worktree_path, prompt_file = worktree_mgr.get_prompt_path(tag_name, prompt_path)
             loader = PromptLoader(worktree_path, cache_enabled=False)
@@ -207,9 +207,8 @@ def get_prompt(
         )
         # Provide more helpful error messages
         if "not found" in error_msg.lower() or "not exist" in error_msg.lower():
-            raise HTTPException(status_code=404, detail=error_msg)
-        else:
-            raise HTTPException(status_code=500, detail=f"Internal server error: {error_msg}")
+            raise HTTPException(status_code=404, detail=error_msg) from e
+        raise HTTPException(status_code=500, detail=f"Internal server error: {error_msg}") from e
 
 
 @app.post("/repos/{repo}/prompts/{prompt_path:path}/render", response_model=RenderResponse)
@@ -220,7 +219,7 @@ def render_prompt(
     version: Annotated[str | None, Query(description="Prompt version (e.g., 1.0.5)")] = None,
 ) -> RenderResponse:
     """Render a prompt with variables, optionally at a specific version.
-    
+
     When version is specified, looks for tag '{prompt_path}/v{version}'.
     """
     logger.info(
@@ -244,7 +243,7 @@ def render_prompt(
             prompt_name = prompt_path.replace("/", "-")
             tag_name = f"{prompt_name}/v{version}"
             logger.debug("Using version-specific tag", extra={"repo": repo, "prompt": prompt_path, "tag": tag_name})
-            
+
             # Use worktree for specific version
             worktree_path, prompt_file = worktree_mgr.get_prompt_path(tag_name, prompt_path)
             loader = PromptLoader(worktree_path, cache_enabled=False)
@@ -288,11 +287,10 @@ def render_prompt(
             exc_info=True,
         )
         if "not found" in error_msg.lower():
-            raise HTTPException(status_code=404, detail=error_msg)
-        elif "missing required" in error_msg.lower() or "template" in error_msg.lower():
-            raise HTTPException(status_code=400, detail=error_msg)
-        else:
-            raise HTTPException(status_code=500, detail=f"Internal server error: {error_msg}")
+            raise HTTPException(status_code=404, detail=error_msg) from e
+        if "missing required" in error_msg.lower() or "template" in error_msg.lower():
+            raise HTTPException(status_code=400, detail=error_msg) from e
+        raise HTTPException(status_code=500, detail=f"Internal server error: {error_msg}") from e
 
 
 @app.get("/health")

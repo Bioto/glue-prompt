@@ -1,7 +1,5 @@
 """Extended tests for prompt registry - versioning, non-git handling."""
 
-import tempfile
-from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
@@ -35,7 +33,7 @@ def test_registry_without_git(sample_prompts_dir):
 
     assert not registry.has_versioning
     with pytest.raises(VersionError, match="not a git repository"):
-        registry.version_manager
+        _ = registry.version_manager
 
 
 def test_registry_with_git(sample_prompts_dir):

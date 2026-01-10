@@ -1,9 +1,6 @@
 """Tests for repository manager - clone, remove, default repo."""
 
-import json
-import tempfile
-from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -11,7 +8,6 @@ from glueprompt.exceptions import GitOperationError
 from glueprompt.repo_manager import (
     RepoManager,
     get_default_repo,
-    get_repos_config_path,
     set_default_repo,
     url_to_repo_name,
 )
@@ -49,9 +45,9 @@ def test_clone_repository(mock_clone, mock_load, mock_save, mock_cache_dir, tmp_
     def create_repo(url, path, **kwargs):
         repo_path.mkdir()
         return Repo.init(repo_path)
-    
+
     mock_clone.side_effect = create_repo
-    
+
     manager = RepoManager()
     result = manager.clone("https://github.com/user/test-repo.git", name="test-repo")
 
@@ -84,7 +80,6 @@ def test_clone_existing_repo_raises_error(mock_load, mock_cache_dir, tmp_path):
 @patch("glueprompt.repo_manager.load_repos_config")
 def test_remove_repository(mock_load, mock_save, mock_cache_dir, tmp_path):
     """Test removing a repository."""
-    import shutil
 
     cache_dir = tmp_path / "cache"
     cache_dir.mkdir()
