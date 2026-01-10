@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import FastAPI, HTTPException, Query
 
 from glueprompt.loader import PromptLoader
+from glueprompt.logging import get_json_logger
 from glueprompt.repo_manager import RepoManager
 from glueprompt.renderer import TemplateRenderer
 from glueprompt.server.models import (
@@ -14,11 +15,13 @@ from glueprompt.server.models import (
     RenderResponse,
     RepoInfo,
     ReposResponse,
-    VersionInfo,
+    VersionInfoResponse,
     VersionsResponse,
 )
 from glueprompt.server.worktree_manager import WorktreeManager
 from glueprompt.versioning import VersionManager
+
+logger = get_json_logger(__name__)
 
 app = FastAPI(
     title="GluePrompt API",
@@ -35,6 +38,7 @@ def get_repo_manager() -> RepoManager:
 @app.get("/repos", response_model=ReposResponse)
 def list_repos() -> ReposResponse:
     """List all available prompt repositories."""
+    logger.info("Listing repositories", extra={"endpoint": "/repos"})
     manager = get_repo_manager()
     repos_data = manager.list_repos()
 
@@ -50,12 +54,14 @@ def list_repos() -> ReposResponse:
                 )
             )
 
+    logger.info("Listed repositories", extra={"count": len(repos)})
     return ReposResponse(repos=repos)
 
 
 @app.get("/repos/{repo}/versions", response_model=VersionsResponse)
 def list_versions(repo: str) -> VersionsResponse:
     """List all available versions (branches and tags) for a repository."""
+    logger.info("Listing versions", extra={"repo": repo, "endpoint": f"/repos/{repo}/versions"})
     manager = get_repo_manager()
 
     try:
@@ -66,9 +72,19 @@ def list_versions(repo: str) -> VersionsResponse:
         tags = version_mgr.list_tags()
         current = version_mgr.current_version()
 
+        logger.debug(
+            "Retrieved versions",
+            extra={
+                "repo": repo,
+                "branch_count": len(branches),
+                "tag_count": len(tags),
+                "current": current.branch_or_tag,
+            },
+        )
+
         return VersionsResponse(
             branches=[
-                VersionInfo(
+                VersionInfoResponse(
                     name=branch.name,
                     commit_hash=branch.commit_hash,
                     is_branch=True,
@@ -77,7 +93,7 @@ def list_versions(repo: str) -> VersionsResponse:
                 for branch in branches
             ],
             tags=[
-                VersionInfo(
+                VersionInfoResponse(
                     name=tag.branch_or_tag,
                     commit_hash=tag.commit_hash,
                     is_branch=False,
@@ -87,6 +103,7 @@ def list_versions(repo: str) -> VersionsResponse:
             current=current.branch_or_tag,
         )
     except Exception as e:
+        logger.error("Failed to list versions", extra={"repo": repo, "error": str(e)}, exc_info=True)
         raise HTTPException(status_code=404, detail=str(e))
 
 
@@ -96,6 +113,7 @@ def list_prompts(
     version: Annotated[str | None, Query(description="Version (branch or tag)")] = None,
 ) -> dict[str, list[str]]:
     """List all prompts in a repository, optionally filtered by version."""
+    logger.info("Listing prompts", extra={"repo": repo, "version": version, "endpoint": f"/repos/{repo}/prompts"})
     manager = get_repo_manager()
 
     try:
@@ -103,8 +121,10 @@ def list_prompts(
         worktree_mgr = WorktreeManager(repo)
         prompts = worktree_mgr.list_prompts(version=version)
 
+        logger.info("Listed prompts", extra={"repo": repo, "version": version, "count": len(prompts)})
         return {"prompts": prompts}
     except Exception as e:
+        logger.error("Failed to list prompts", extra={"repo": repo, "version": version, "error": str(e)}, exc_info=True)
         raise HTTPException(status_code=404, detail=str(e))
 
 
@@ -118,6 +138,10 @@ def get_prompt(
     
     When version is specified, looks for tag '{prompt_path}/v{version}'.
     """
+    logger.info(
+        "Getting prompt",
+        extra={"repo": repo, "prompt": prompt_path, "version": version, "endpoint": f"/repos/{repo}/prompts/{prompt_path}"},
+    )
     manager = get_repo_manager()
 
     try:
@@ -129,6 +153,7 @@ def get_prompt(
             # e.g., version="1.0.5", prompt_path="default" -> tag="default/v1.0.5"
             prompt_name = prompt_path.replace("/", "-")
             tag_name = f"{prompt_name}/v{version}"
+            logger.debug("Using version-specific tag", extra={"repo": repo, "prompt": prompt_path, "tag": tag_name})
             
             # Use worktree for specific version
             worktree_path, prompt_file = worktree_mgr.get_prompt_path(tag_name, prompt_path)
@@ -143,6 +168,15 @@ def get_prompt(
             loader = PromptLoader(repo_path, cache_enabled=False)
             prompt = loader.load(prompt_path, use_cache=False)
 
+        logger.info(
+            "Retrieved prompt",
+            extra={
+                "repo": repo,
+                "prompt": prompt_path,
+                "version": prompt.metadata.version,
+                "name": prompt.metadata.name,
+            },
+        )
         return PromptResponse(
             metadata=PromptMetadataResponse(
                 name=prompt.metadata.name,
@@ -166,6 +200,11 @@ def get_prompt(
         raise
     except Exception as e:
         error_msg = str(e)
+        logger.error(
+            "Failed to get prompt",
+            extra={"repo": repo, "prompt": prompt_path, "version": version, "error": error_msg},
+            exc_info=True,
+        )
         # Provide more helpful error messages
         if "not found" in error_msg.lower() or "not exist" in error_msg.lower():
             raise HTTPException(status_code=404, detail=error_msg)
@@ -184,6 +223,16 @@ def render_prompt(
     
     When version is specified, looks for tag '{prompt_path}/v{version}'.
     """
+    logger.info(
+        "Rendering prompt",
+        extra={
+            "repo": repo,
+            "prompt": prompt_path,
+            "version": version,
+            "variables": list(request.variables.keys()),
+            "endpoint": f"/repos/{repo}/prompts/{prompt_path}/render",
+        },
+    )
     manager = get_repo_manager()
 
     try:
@@ -194,6 +243,7 @@ def render_prompt(
             # Convert version to prompt-specific tag format
             prompt_name = prompt_path.replace("/", "-")
             tag_name = f"{prompt_name}/v{version}"
+            logger.debug("Using version-specific tag", extra={"repo": repo, "prompt": prompt_path, "tag": tag_name})
             
             # Use worktree for specific version
             worktree_path, prompt_file = worktree_mgr.get_prompt_path(tag_name, prompt_path)
@@ -213,11 +263,30 @@ def render_prompt(
         renderer = TemplateRenderer()
         rendered = renderer.render(prompt, **request.variables)
 
+        logger.info(
+            "Rendered prompt",
+            extra={
+                "repo": repo,
+                "prompt": prompt_path,
+                "version": used_version,
+                "rendered_length": len(rendered),
+            },
+        )
         return RenderResponse(rendered=rendered, version=used_version)
     except HTTPException:
         raise
     except Exception as e:
         error_msg = str(e)
+        logger.error(
+            "Failed to render prompt",
+            extra={
+                "repo": repo,
+                "prompt": prompt_path,
+                "version": version,
+                "error": error_msg,
+            },
+            exc_info=True,
+        )
         if "not found" in error_msg.lower():
             raise HTTPException(status_code=404, detail=error_msg)
         elif "missing required" in error_msg.lower() or "template" in error_msg.lower():

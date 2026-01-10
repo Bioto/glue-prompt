@@ -1,5 +1,7 @@
 """Prompt diff and comparison utilities."""
 
+from typing import Any
+
 from difflib import unified_diff
 
 from glueprompt.models.prompt import Prompt
@@ -58,8 +60,8 @@ class PromptDiffer:
             "variables_removed": set(prompt1.variables.keys()) - set(prompt2.variables.keys()),
             "variables_changed": {
                 var: {
-                    "old": prompt1.variables[var].dict() if var in prompt1.variables else None,
-                    "new": prompt2.variables[var].dict() if var in prompt2.variables else None,
+                    "old": prompt1.variables[var].model_dump() if var in prompt1.variables else None,
+                    "new": prompt2.variables[var].model_dump() if var in prompt2.variables else None,
                 }
                 for var in set(prompt1.variables.keys()) & set(prompt2.variables.keys())
                 if prompt1.variables[var] != prompt2.variables[var]

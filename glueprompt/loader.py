@@ -7,7 +7,10 @@ from typing import Any
 import yaml
 
 from glueprompt.exceptions import PromptNotFoundError, PromptValidationError
+from glueprompt.logging import get_logger
 from glueprompt.models.prompt import Prompt, PromptMetadata, VariableDefinition
+
+logger = get_logger(__name__)
 
 
 class PromptLoader:
@@ -62,6 +65,31 @@ class PromptLoader:
         _, timestamp = cache_entry
         return (time.time() - timestamp) < self.cache_ttl
 
+    def _validate_prompt_path(self, resolved_path: Path) -> None:
+        """Validate that resolved path doesn't escape prompts directory.
+
+        Args:
+            resolved_path: Resolved path to validate
+
+        Raises:
+            PromptValidationError: If path escapes prompts directory
+        """
+        try:
+            resolved_prompts_dir = self.prompts_dir.resolve()
+            resolved_file = resolved_path.resolve()
+            if not resolved_file.is_relative_to(resolved_prompts_dir):
+                logger.error(
+                    f"Path traversal attempt detected: {resolved_path} "
+                    f"escapes prompts directory {resolved_prompts_dir}"
+                )
+                raise PromptValidationError(
+                    f"Invalid prompt path: path escapes prompts directory"
+                )
+        except (OSError, ValueError) as e:
+            # Handle cases where path resolution fails (e.g., broken symlinks)
+            logger.error(f"Failed to resolve path: {resolved_path}", exc_info=True)
+            raise PromptValidationError(f"Invalid prompt path: {e}") from e
+
     def _resolve_prompt_file(self, prompt_path: str) -> Path:
         """Resolve prompt path to actual file.
 
@@ -73,22 +101,30 @@ class PromptLoader:
 
         Raises:
             PromptNotFoundError: If prompt file doesn't exist
+            PromptValidationError: If path escapes prompts directory
         """
         # Try with .yaml extension
         yaml_path = self.prompts_dir / f"{prompt_path}.yaml"
         if yaml_path.exists():
+            self._validate_prompt_path(yaml_path)
+            logger.debug(f"Resolved prompt file: {prompt_path} -> {yaml_path}")
             return yaml_path
 
         # Try with .yml extension
         yml_path = self.prompts_dir / f"{prompt_path}.yml"
         if yml_path.exists():
+            self._validate_prompt_path(yml_path)
+            logger.debug(f"Resolved prompt file: {prompt_path} -> {yml_path}")
             return yml_path
 
         # Try as directory with index.yaml
         index_path = self.prompts_dir / prompt_path / "index.yaml"
         if index_path.exists():
+            self._validate_prompt_path(index_path)
+            logger.debug(f"Resolved prompt file: {prompt_path} -> {index_path}")
             return index_path
 
+        logger.error(f"Prompt file not found: {prompt_path} (tried: {yaml_path}, {yml_path}, {index_path})")
         raise PromptNotFoundError(
             f"Prompt not found: {prompt_path}. "
             f"Tried: {yaml_path}, {yml_path}, {index_path}"
@@ -139,6 +175,7 @@ class PromptLoader:
                 variables=variables,
             )
         except Exception as e:
+            logger.error(f"Failed to parse prompt YAML: {e}", exc_info=True)
             raise PromptValidationError(f"Failed to parse prompt YAML: {e}") from e
 
     def load(self, prompt_path: str, use_cache: bool = True) -> Prompt:
@@ -161,7 +198,12 @@ class PromptLoader:
         if use_cache and self.cache_enabled and cache_key in self.cache:
             cached_prompt, timestamp = self.cache[cache_key]
             if self._is_cache_valid((cached_prompt, timestamp)):
+                logger.debug(f"Cache hit for prompt: {prompt_path}")
                 return cached_prompt
+            else:
+                logger.debug(f"Cache expired for prompt: {prompt_path}")
+
+        logger.debug(f"Cache miss for prompt: {prompt_path}")
 
         # Load from file
         prompt_file = self._resolve_prompt_file(prompt_path)
@@ -181,15 +223,23 @@ class PromptLoader:
             if self.cache_enabled:
                 self.cache[cache_key] = (prompt, time.time())
 
+            logger.info(
+                f"Loaded prompt: {prompt_path} (name={prompt.metadata.name}, "
+                f"version={prompt.metadata.version}, cached=False)"
+            )
             return prompt
         except FileNotFoundError as e:
+            logger.error(f"Prompt file not found: {prompt_file}", exc_info=True)
             raise PromptNotFoundError(f"Prompt file not found: {prompt_file}") from e
         except yaml.YAMLError as e:
+            logger.error(f"Invalid YAML in prompt file {prompt_file}: {e}", exc_info=True)
             raise PromptValidationError(f"Invalid YAML in prompt file: {e}") from e
 
     def clear_cache(self) -> None:
         """Clear the prompt cache."""
+        cache_size = len(self.cache)
         self.cache.clear()
+        logger.debug(f"Cleared prompt cache ({cache_size} entries)")
 
     def invalidate_cache(self, prompt_path: str | None = None) -> None:
         """Invalidate cache for a specific prompt or all prompts.
@@ -201,5 +251,9 @@ class PromptLoader:
             self.clear_cache()
         else:
             cache_key = self._get_cache_key(prompt_path)
-            self.cache.pop(cache_key, None)
+            if cache_key in self.cache:
+                self.cache.pop(cache_key, None)
+                logger.debug(f"Invalidated cache for prompt: {prompt_path}")
+            else:
+                logger.debug(f"Cache entry not found for prompt: {prompt_path}")
 

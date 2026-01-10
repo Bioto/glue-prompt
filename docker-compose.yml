@@ -1,17 +1,25 @@
 version: '3.8'
 
 services:
-  gluellm-app:
+  glueprompt-server:
     build: .
+    ports:
+      - "8000:8000"
     environment:
-      - GLUELLM_DEFAULT_MODEL=${GLUELLM_DEFAULT_MODEL:-openai:gpt-4o-mini}
-      - GLUELLM_LOG_LEVEL=${GLUELLM_LOG_LEVEL:-INFO}
-      - GLUELLM_MAX_TOOL_ITERATIONS=${GLUELLM_MAX_TOOL_ITERATIONS:-10}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - XAI_API_KEY=${XAI_API_KEY:-}
+      - GLUEPROMPT_LOG_LEVEL=${GLUEPROMPT_LOG_LEVEL:-INFO}
+      - GLUEPROMPT_DEFAULT_PROMPTS_PATH=${GLUEPROMPT_DEFAULT_PROMPTS_PATH:-./prompts}
+      - GLUEPROMPT_CACHE_ENABLED=${GLUEPROMPT_CACHE_ENABLED:-true}
+      - GLUEPROMPT_CACHE_TTL_SECONDS=${GLUEPROMPT_CACHE_TTL_SECONDS:-300}
     volumes:
-      - ./logs:/app/logs
+      # Mount cache and config directories for persistence
+      - glueprompt-cache:/root/.cache/glueprompt
+      - glueprompt-config:/root/.config/glueprompt
+      # Optionally mount local prompts directory
+      # - ./prompts:/app/prompts:ro
     restart: unless-stopped
     # Override command as needed
-    # command: ["python", "your_app.py"]
+    # command: ["glueprompt", "serve", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+volumes:
+  glueprompt-cache:
+  glueprompt-config:

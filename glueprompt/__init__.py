@@ -27,6 +27,7 @@ Main Components:
     - PromptLoader: Load and parse YAML prompts
 """
 
+from glueprompt.logging import get_logger
 from glueprompt.models.prompt import Prompt, PromptMetadata, VariableDefinition
 from glueprompt.models.version import BranchInfo, VersionInfo
 from glueprompt.registry import PromptRegistry
@@ -40,6 +41,7 @@ __all__ = [
     "VariableDefinition",
     "VersionInfo",
     "BranchInfo",
+    "get_logger",
 ]
 
 __version__ = "0.1.0"

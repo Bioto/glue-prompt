@@ -7,6 +7,9 @@ from pathlib import Path
 from git import GitCommandError, InvalidGitRepositoryError, Repo
 
 from glueprompt.exceptions import GitOperationError
+from glueprompt.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def get_cache_dir() -> Path:
@@ -94,6 +97,7 @@ def save_repos_config(config: dict[str, dict]) -> None:
         config: Dictionary mapping repo names to their config
     """
     config_path = get_repos_config_path()
+    logger.debug(f"Saving repos config to {config_path} ({len(config)} repos)")
     with config_path.open("w") as f:
         json.dump(config, f, indent=2)
 
@@ -146,11 +150,15 @@ class RepoManager:
 
         repo_path = self.cache_dir / name
 
+        logger.info(f"Cloning repository: {name} from {url} (branch={branch}, force={force})")
+
         # Check if already exists
         if repo_path.exists():
             if force:
+                logger.debug(f"Removing existing repository at {repo_path}")
                 shutil.rmtree(repo_path)
             else:
+                logger.warning(f"Repository '{name}' already exists at {repo_path}")
                 raise GitOperationError(
                     f"Repository '{name}' already exists at {repo_path}. "
                     f"Use --force to re-clone or 'glueprompt repo remove {name}' first."
@@ -161,16 +169,19 @@ class RepoManager:
             clone_args = {}
             if branch:
                 clone_args["branch"] = branch
+                logger.debug(f"Cloning with branch: {branch}")
 
+            logger.debug(f"Cloning to {repo_path}")
             Repo.clone_from(url, str(repo_path), **clone_args)
 
             # Fetch all branches and tags
             repo = Repo(str(repo_path))
             try:
+                logger.debug("Fetching all branches and tags")
                 repo.git.fetch("--all", "--tags", "--prune")
-            except Exception:
+            except Exception as e:
                 # If fetch fails, continue anyway
-                pass
+                logger.debug(f"Fetch failed (non-fatal): {e}")
 
             # Save to config
             self.config[name] = {
@@ -180,11 +191,14 @@ class RepoManager:
             }
             save_repos_config(self.config)
 
+            logger.info(f"Successfully cloned repository: {name} to {repo_path}")
             return repo_path
         except GitCommandError as e:
             # Clean up partial clone
             if repo_path.exists():
+                logger.debug(f"Cleaning up partial clone at {repo_path}")
                 shutil.rmtree(repo_path)
+            logger.error(f"Failed to clone repository: {e}", exc_info=True)
             raise GitOperationError(f"Failed to clone repository: {e}") from e
 
     def remove(self, name: str) -> None:
@@ -196,15 +210,21 @@ class RepoManager:
         Raises:
             GitOperationError: If repo doesn't exist
         """
+        logger.info(f"Removing repository: {name}")
         if name not in self.config:
+            logger.error(f"Repository '{name}' not found in config")
             raise GitOperationError(f"Repository '{name}' not found in config")
 
         repo_path = Path(self.config[name]["path"])
         if repo_path.exists():
+            logger.debug(f"Removing directory: {repo_path}")
             shutil.rmtree(repo_path)
+        else:
+            logger.debug(f"Repository directory does not exist: {repo_path}")
 
         del self.config[name]
         save_repos_config(self.config)
+        logger.info(f"Successfully removed repository: {name}")
 
     def get_path(self, name: str) -> Path:
         """Get path to a cached repository.
@@ -276,17 +296,22 @@ class RepoManager:
         Raises:
             GitOperationError: If update fails
         """
+        logger.info(f"Updating repository: {name} (branch={branch})")
         path = self.get_path(name)
 
         try:
             repo = Repo(str(path))
 
             if branch:
+                logger.debug(f"Checking out branch: {branch}")
                 repo.git.checkout(branch)
 
             # Pull latest
+            logger.debug("Pulling latest changes")
             repo.git.pull()
+            logger.info(f"Successfully updated repository: {name}")
         except GitCommandError as e:
+            logger.error(f"Failed to update repository: {e}", exc_info=True)
             raise GitOperationError(f"Failed to update repository: {e}") from e
 
     def get_default_repo(self) -> str | None:
@@ -306,10 +331,15 @@ class RepoManager:
         Raises:
             GitOperationError: If repo doesn't exist
         """
-        if name and name not in self.config:
-            raise GitOperationError(
-                f"Repository '{name}' not found. "
-                f"Use 'glueprompt repo add <url>' to add it first."
-            )
+        if name:
+            logger.info(f"Setting default repository: {name}")
+            if name not in self.config:
+                logger.error(f"Repository '{name}' not found in config")
+                raise GitOperationError(
+                    f"Repository '{name}' not found. "
+                    f"Use 'glueprompt repo add <url>' to add it first."
+                )
+        else:
+            logger.info("Clearing default repository")
         set_default_repo(name)
 

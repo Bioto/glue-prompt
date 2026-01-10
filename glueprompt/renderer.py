@@ -2,10 +2,13 @@
 
 from typing import Any
 
-from jinja2 import Environment, Template, TemplateError, UndefinedError
+from jinja2 import Environment, StrictUndefined, Template, TemplateError, UndefinedError
 
 from glueprompt.exceptions import TemplateRenderError
+from glueprompt.logging import get_logger
 from glueprompt.models.prompt import Prompt
+
+logger = get_logger(__name__)
 
 
 class TemplateRenderer:
@@ -25,6 +28,7 @@ class TemplateRenderer:
             trim_blocks=True,
             lstrip_blocks=True,
             keep_trailing_newline=True,
+            undefined=StrictUndefined,  # Raise errors for undefined variables
         )
 
     def render(
@@ -44,28 +48,37 @@ class TemplateRenderer:
         Raises:
             TemplateRenderError: If rendering fails or required variables missing
         """
+        logger.debug(f"Rendering template for prompt: {prompt.metadata.name}")
+
         # Merge defaults with provided variables
         merged_vars = prompt.get_variable_defaults()
         merged_vars.update(variables)
+        logger.debug(f"Merged variables: {list(merged_vars.keys())} (provided: {list(variables.keys())}, defaults: {list(prompt.get_variable_defaults().keys())})")
 
         # Check required variables
         required = prompt.get_required_variables()
         missing = [var for var in required if var not in merged_vars]
         if missing:
+            logger.error(f"Missing required variables: {missing}")
             raise TemplateRenderError(
                 f"Missing required variables: {', '.join(missing)}"
             )
 
         try:
             template = self.env.from_string(prompt.template)
-            return template.render(**merged_vars)
+            rendered = template.render(**merged_vars)
+            logger.debug(f"Template rendered successfully (length={len(rendered)} chars)")
+            return rendered
         except UndefinedError as e:
+            logger.error(f"Undefined variable in template: {e}", exc_info=True)
             raise TemplateRenderError(
                 f"Undefined variable in template: {e}"
             ) from e
         except TemplateError as e:
+            logger.error(f"Template rendering error: {e}", exc_info=True)
             raise TemplateRenderError(f"Template rendering error: {e}") from e
         except Exception as e:
+            logger.error(f"Unexpected rendering error: {e}", exc_info=True)
             raise TemplateRenderError(f"Unexpected rendering error: {e}") from e
 
     def validate_template(self, prompt: Prompt) -> list[str]:
@@ -80,13 +93,8 @@ class TemplateRenderer:
         errors: list[str] = []
 
         try:
-            template = self.env.parse(prompt.template)
-            # Check for undefined variables that aren't in the variables dict
-            undefined_vars = self.env.get_template(
-                prompt.template, globals={}
-            ).get_corresponding_lineno(0)
-            # This is a simplified check - Jinja2 doesn't easily expose undefined vars
-            # For now, we'll just check syntax
+            # Just parse the template to check syntax
+            self.env.parse(prompt.template)
         except TemplateError as e:
             errors.append(f"Template syntax error: {e}")
 

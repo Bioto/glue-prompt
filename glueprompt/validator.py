@@ -6,7 +6,10 @@ from typing import Any
 from jinja2 import Environment, TemplateError
 
 from glueprompt.exceptions import PromptValidationError
+from glueprompt.logging import get_logger
 from glueprompt.models.prompt import Prompt
+
+logger = get_logger(__name__)
 
 
 class PromptValidator:
@@ -43,6 +46,7 @@ class PromptValidator:
         Returns:
             List of validation errors (empty if valid)
         """
+        logger.debug(f"Validating prompt: {prompt.metadata.name}")
         errors: list[str] = []
 
         # Validate metadata
@@ -70,8 +74,7 @@ class PromptValidator:
         unused_vars = defined_vars - template_vars
         if unused_vars:
             # This is just informational, not an error
-
-            pass
+            logger.debug(f"Unused variables defined: {', '.join(sorted(unused_vars))}")
 
         # Validate variable definitions
         for var_name, var_def in prompt.variables.items():
@@ -88,41 +91,40 @@ class PromptValidator:
                     f"Valid types: {', '.join(valid_types)}"
                 )
 
+        if errors:
+            logger.warning(f"Validation failed for prompt '{prompt.metadata.name}': {len(errors)} error(s)")
+        else:
+            logger.debug(f"Validation passed for prompt '{prompt.metadata.name}'")
+
         return errors
 
     def _extract_template_variables(self, template: str) -> set[str]:
         """Extract variable names from Jinja2 template.
 
+        Extracts only template input variables, excluding locally scoped variables
+        from {% for %} loops and {% set %} statements.
+
         Args:
             template: Jinja2 template string
 
         Returns:
-            Set of variable names used in template
+            Set of variable names used in template (excluding local variables)
         """
         variables: set[str] = set()
 
         # Pattern to match Jinja2 variable expressions: {{ var }} or {{ var.attr }}
-        # Also handles {% set var = ... %} and {% for var in ... %}
         var_pattern = r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)\s*\}\}"
-        for_match = r"\{\%\s*for\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+in\s+"
-        set_match = r"\{\%\s*set\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*="
 
-        # Find all {{ var }} patterns
+        # Find all {{ var }} patterns - these are template inputs
         for match in re.finditer(var_pattern, template):
             var_expr = match.group(1)
             # Extract base variable name (before first dot)
             base_var = var_expr.split(".")[0]
             variables.add(base_var)
 
-        # Find {% for var in ... %} patterns
-        for match in re.finditer(for_match, template):
-            var_name = match.group(1)
-            variables.add(var_name)
-
-        # Find {% set var = ... %} patterns
-        for match in re.finditer(set_match, template):
-            var_name = match.group(1)
-            variables.add(var_name)
+        # Note: We intentionally exclude loop variables ({% for var in ... %}) and
+        # set variables ({% set var = ... %}) since these are locally scoped within
+        # the template and not template inputs that need to be defined.
 
         return variables
 
@@ -138,5 +140,6 @@ class PromptValidator:
         errors = self.validate(prompt)
         if errors:
             error_msg = "Prompt validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
+            logger.error(f"Validation failed for prompt '{prompt.metadata.name}': {error_msg}")
             raise PromptValidationError(error_msg)
 

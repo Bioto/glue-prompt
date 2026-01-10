@@ -8,7 +8,10 @@ from git import GitCommandError, Repo
 from git.exc import InvalidGitRepositoryError
 
 from glueprompt.exceptions import GitOperationError
+from glueprompt.logging import get_json_logger
 from glueprompt.repo_manager import get_cache_dir
+
+logger = get_json_logger(__name__)
 
 
 def get_worktree_dir() -> Path:
@@ -49,7 +52,9 @@ class WorktreeManager:
         # Open main repo
         try:
             self.main_repo = Repo(str(self.repo_path))
+            logger.debug("Initialized worktree manager", extra={"repo": repo_name, "path": str(self.repo_path)})
         except InvalidGitRepositoryError as e:
+            logger.error("Invalid git repository", extra={"repo": repo_name, "path": str(self.repo_path)}, exc_info=True)
             raise GitOperationError(f"Not a valid git repository: {self.repo_path}") from e
 
     def get_worktree_path(self, version: str) -> Path:
@@ -85,18 +90,22 @@ class WorktreeManager:
             try:
                 worktree_repo = Repo(str(worktree_path))
                 # Check if it's pointing to the right commit
+                logger.debug("Using existing worktree", extra={"repo": self.repo_name, "version": version, "path": str(worktree_path)})
                 return worktree_path
-            except Exception:
+            except Exception as e:
                 # Worktree is broken, remove and recreate
+                logger.warning("Broken worktree detected, removing", extra={"repo": self.repo_name, "version": version, "error": str(e)})
                 shutil.rmtree(worktree_path)
 
         # Create new worktree
+        logger.info("Creating worktree", extra={"repo": self.repo_name, "version": version, "path": str(worktree_path)})
         try:
             # Fetch latest from remote
             try:
+                logger.debug("Fetching latest from remote", extra={"repo": self.repo_name})
                 self.main_repo.git.fetch("--all", "--tags", "--prune")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Fetch failed (non-fatal)", extra={"repo": self.repo_name, "error": str(e)})
 
             # Check if version exists as tag, local branch, or remote branch
             tag_names = [tag.name for tag in self.main_repo.tags]
@@ -110,29 +119,42 @@ class WorktreeManager:
                     line = line.strip()
                     if line.startswith("origin/") and line != "origin/HEAD":
                         remote_branches.append(line.replace("origin/", ""))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(
+                    "Failed to get remote branches (non-fatal)",
+                    extra={"repo": self.repo_name, "error": str(e)},
+                    exc_info=True,
+                )
 
             if version in tag_names:
                 # Create worktree from tag
                 tag_ref = self.main_repo.tags[version]
+                logger.debug("Creating worktree from tag", extra={"repo": self.repo_name, "version": version, "tag": version})
                 self.main_repo.git.worktree("add", str(worktree_path), tag_ref.commit.hexsha)
             elif version in branch_names:
                 # Create worktree from local branch
+                logger.debug("Creating worktree from local branch", extra={"repo": self.repo_name, "version": version})
                 self.main_repo.git.worktree("add", str(worktree_path), version)
             elif version in remote_branches:
                 # Create worktree from remote branch (creates local tracking branch)
+                logger.debug("Creating worktree from remote branch", extra={"repo": self.repo_name, "version": version})
                 self.main_repo.git.worktree("add", "-b", version, str(worktree_path), f"origin/{version}")
             else:
                 # Version not found - provide helpful error
                 all_versions = branch_names + remote_branches + tag_names
+                logger.error(
+                    "Version not found",
+                    extra={"repo": self.repo_name, "version": version, "available": all_versions},
+                )
                 raise GitOperationError(
                     f"Version '{version}' not found. "
                     f"Available versions: {all_versions if all_versions else ['(none)']}"
                 )
 
+            logger.info("Worktree created successfully", extra={"repo": self.repo_name, "version": version, "path": str(worktree_path)})
             return worktree_path
         except GitCommandError as e:
+            logger.error("Failed to create worktree", extra={"repo": self.repo_name, "version": version, "error": str(e)}, exc_info=True)
             raise GitOperationError(f"Failed to create worktree for {version}: {e}") from e
 
     def get_prompt_path(self, version: str, prompt_path: str) -> tuple[Path, Path]:
@@ -199,6 +221,9 @@ class WorktreeManager:
         if not self.worktree_base.exists():
             return
 
+        logger.info("Cleaning up unused worktrees", extra={"repo": self.repo_name, "active_versions": list(active_versions)})
+        removed_count = 0
+
         for worktree_dir in self.worktree_base.iterdir():
             if not worktree_dir.is_dir():
                 continue
@@ -207,8 +232,15 @@ class WorktreeManager:
             if version not in active_versions:
                 try:
                     # Remove worktree properly
+                    logger.debug("Removing unused worktree", extra={"repo": self.repo_name, "version": version})
                     self.main_repo.git.worktree("remove", str(worktree_dir), force=True)
-                except Exception:
+                    removed_count += 1
+                except Exception as e:
                     # Fallback: just delete directory
+                    logger.warning("Failed to remove worktree properly, using fallback", extra={"repo": self.repo_name, "version": version, "error": str(e)})
                     shutil.rmtree(worktree_dir, ignore_errors=True)
+                    removed_count += 1
+
+        if removed_count > 0:
+            logger.info("Cleaned up worktrees", extra={"repo": self.repo_name, "removed_count": removed_count})
 

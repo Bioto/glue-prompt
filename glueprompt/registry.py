@@ -6,11 +6,14 @@ from typing import Any
 from glueprompt.config import get_settings
 from glueprompt.exceptions import GitOperationError, VersionError
 from glueprompt.loader import PromptLoader
+from glueprompt.logging import get_logger
 from glueprompt.models.prompt import Prompt
 from glueprompt.models.version import BranchInfo, VersionInfo
 from glueprompt.renderer import TemplateRenderer
 from glueprompt.validator import PromptValidator
 from glueprompt.versioning import VersionManager
+
+logger = get_logger(__name__)
 
 
 class PromptRegistry:
@@ -60,9 +63,10 @@ class PromptRegistry:
         self._version_manager: VersionManager | None = None
         try:
             self._version_manager = VersionManager(self.prompts_dir)
+            logger.debug(f"Version manager initialized for {self.prompts_dir}")
         except GitOperationError:
             # Not a git repo, versioning features disabled
-            pass
+            logger.debug(f"Versioning not available: {self.prompts_dir} is not a git repository")
 
     @property
     def version_manager(self) -> VersionManager:
@@ -93,10 +97,12 @@ class PromptRegistry:
             PromptNotFoundError: If prompt doesn't exist
             PromptValidationError: If validation fails
         """
+        logger.info(f"Getting prompt: {prompt_path} (validate={validate})")
         prompt = self.loader.load(prompt_path)
 
         if validate:
             self.validator.validate_and_raise(prompt)
+            logger.debug(f"Prompt validated successfully: {prompt_path}")
 
         return prompt
 
@@ -121,8 +127,11 @@ class PromptRegistry:
             PromptValidationError: If validation fails
             TemplateRenderError: If rendering fails
         """
+        logger.info(f"Rendering prompt: {prompt_path} (variables={list(variables.keys())})")
         prompt = self.get(prompt_path, validate=validate)
-        return self.renderer.render(prompt, **variables)
+        rendered = self.renderer.render(prompt, **variables)
+        logger.debug(f"Prompt rendered successfully: {prompt_path} (length={len(rendered)} chars)")
+        return rendered
 
     def validate(self, prompt_path: str) -> list[str]:
         """Validate a prompt.
@@ -149,9 +158,11 @@ class PromptRegistry:
         Raises:
             VersionError: If checkout fails
         """
+        logger.info(f"Checking out version: {branch_or_tag} (create_branch={create_branch})")
         self.version_manager.checkout(branch_or_tag, create_branch=create_branch)
         # Invalidate cache after version change
         self.loader.clear_cache()
+        logger.debug("Cache invalidated after version checkout")
 
     def current_version(self) -> VersionInfo:
         """Get current version.
@@ -206,6 +217,7 @@ class PromptRegistry:
 
     def clear_cache(self) -> None:
         """Clear the prompt cache."""
+        logger.debug("Clearing prompt cache")
         self.loader.clear_cache()
 
     def invalidate_cache(self, prompt_path: str | None = None) -> None:
@@ -214,5 +226,9 @@ class PromptRegistry:
         Args:
             prompt_path: Specific prompt path, or None for all
         """
+        if prompt_path:
+            logger.debug(f"Invalidating cache for prompt: {prompt_path}")
+        else:
+            logger.debug("Invalidating cache for all prompts")
         self.loader.invalidate_cache(prompt_path)
 

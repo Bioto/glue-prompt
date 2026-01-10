@@ -36,8 +36,8 @@ class RenderResponse(BaseModel):
     version: str
 
 
-class VersionInfo(BaseModel):
-    """Version information."""
+class VersionInfoResponse(BaseModel):
+    """Version information for API responses."""
 
     name: str
     commit_hash: str
@@ -48,8 +48,8 @@ class VersionInfo(BaseModel):
 class VersionsResponse(BaseModel):
     """List of versions response."""
 
-    branches: list[VersionInfo]
-    tags: list[VersionInfo]
+    branches: list[VersionInfoResponse]
+    tags: list[VersionInfoResponse]
     current: str
 
 
