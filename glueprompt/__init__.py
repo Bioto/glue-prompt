@@ -20,13 +20,20 @@ Quick Start:
     >>> # Switch versions
     >>> registry.checkout("v1.0")
 
+    # Or use API client to connect to remote server
+    >>> from glueprompt import APIPromptRegistry
+    >>> client = APIPromptRegistry(base_url="http://localhost:8000", repo="my-prompts")
+    >>> rendered = await client.render("assistants/helpful-bot", name="Claude")
+
 Main Components:
-    - PromptRegistry: Main entry point for prompt management
+    - PromptRegistry: Main entry point for prompt management (local)
+    - APIPromptRegistry: API client for remote prompt management
     - Prompt: Loaded prompt with rendering capabilities
     - VersionManager: Git branch/tag operations
     - PromptLoader: Load and parse YAML prompts
 """
 
+from glueprompt.client import APIPromptRegistry
 from glueprompt.logging import get_logger
 from glueprompt.models.prompt import Prompt, PromptMetadata, VariableDefinition
 from glueprompt.models.version import BranchInfo, VersionInfo
@@ -35,6 +42,7 @@ from glueprompt.repo_manager import RepoManager
 
 __all__ = [
     "PromptRegistry",
+    "APIPromptRegistry",
     "RepoManager",
     "Prompt",
     "PromptMetadata",

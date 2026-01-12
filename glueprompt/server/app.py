@@ -174,7 +174,7 @@ def get_prompt(
                 "repo": repo,
                 "prompt": prompt_path,
                 "version": prompt.metadata.version,
-                "name": prompt.metadata.name,
+                "prompt_name": prompt.metadata.name,
             },
         )
         return PromptResponse(

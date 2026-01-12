@@ -13,6 +13,32 @@ _DEFAULT_LOG_LEVEL = logging.INFO
 class JSONFormatter(logging.Formatter):
     """JSON formatter for structured logging (used by server module)."""
 
+    # Standard LogRecord attributes that should not be included as extra fields
+    _STANDARD_ATTRS = {
+        "name",
+        "msg",
+        "args",
+        "created",
+        "filename",
+        "funcName",
+        "levelname",
+        "levelno",
+        "lineno",
+        "module",
+        "msecs",
+        "message",
+        "pathname",
+        "process",
+        "processName",
+        "relativeCreated",
+        "thread",
+        "threadName",
+        "exc_info",
+        "exc_text",
+        "stack_info",
+        "taskName",  # Python 3.12+
+    }
+
     def format(self, record: logging.LogRecord) -> str:
         """Format log record as JSON.
 
@@ -29,9 +55,11 @@ class JSONFormatter(logging.Formatter):
             "message": record.getMessage(),
         }
 
-        # Add extra fields if present
-        if hasattr(record, "extra"):
-            log_data.update(record.extra)
+        # Add extra fields (fields from extra dict are set as attributes on record)
+        # Only include attributes that aren't standard LogRecord attributes
+        for key, value in record.__dict__.items():
+            if key not in self._STANDARD_ATTRS:
+                log_data[key] = value
 
         # Add exception info if present
         if record.exc_info:
