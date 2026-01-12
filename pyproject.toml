@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "glueprompt"
-version = "0.1.0"
+version = "0.1.1"
 description = "Git-based prompt versioning system using branches for managing prompt templates"
 readme = "README.md"
 license = {text = "MIT"}
